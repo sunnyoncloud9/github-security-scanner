@@ -1,0 +1,21 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# AWS
+*.zip
+lambda_package/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
