@@ -232,8 +232,9 @@ github-security-scanner/
 ## 👤 Author
 
 **Sunny Bhardwaj** — Security Engineer  
-[github.com/sunnyoncloud9](https://github.com/sunnyoncloud9)
+[github.com/sunnyoncloud9](https://github.com/sunnyoncloud9) 
+[linkedin.com/in/bhardwajsunny](https://linkedin.com/in/bhardwajsunny)
 
 ---
 
-*Part of a 25-project FAANG security engineering portfolio*
+*Part of a multi-phase security engineering portfolio*
