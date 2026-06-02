@@ -198,7 +198,7 @@ aws events put-targets \
 | AWS Lambda | Serverless execution |
 | AWS SNS | Email alerting |
 | AWS EventBridge | Scheduled trigger |
-| GitHub API (PyGithub) | Repository scanning |
+| GitHub API (requests) | Repository scanning |
 | boto3 | AWS SDK |
 
 ---
@@ -229,11 +229,23 @@ github-security-scanner/
 
 ---
 
+## 📸 AWS Deployment Screenshots
+
+### Lambda Function — Successful Execution
+![Lambda Test Success](screenshots/lambda-test-success.png)
+
+### Lambda Dashboard — Live Metrics
+![Lambda Dashboard](screenshots/lambda-dashboard.png)
+
+### CloudWatch Logs — Execution History
+![CloudWatch Logs](screenshots/cloudwatch-logs.png)
+
+---
+
 ## 👤 Author
 
 **Sunny Bhardwaj** — Security Engineer  
-[github.com/sunnyoncloud9](https://github.com/sunnyoncloud9) 
-[linkedin.com/in/bhardwajsunny](https://linkedin.com/in/bhardwajsunny)
+[github.com/sunnyoncloud9](https://github.com/sunnyoncloud9) • [linkedin.com/in/bhardwajsunny](https://linkedin.com/in/bhardwajsunny)
 
 ---
 
