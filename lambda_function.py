@@ -1,7 +1,7 @@
 import os
 import json
 import boto3
-from github import Github
+import requests
 from dotenv import load_dotenv
 from scanner.secrets_scanner import scan_repo_for_secrets
 from scanner.misconfig_scanner import scan_repo_for_misconfigs
@@ -13,11 +13,10 @@ load_dotenv()
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME", "sunnyoncloud9")
 SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+AWS_REGION = os.environ.get("AWS_REGION_CUSTOM", "us-east-2")
 
 
 def format_report(username, results):
-    """Format scan results into a readable report."""
     total_secrets = sum(len(r["secrets"]) for r in results)
     total_misconfigs = sum(len(r["misconfigs"]) for r in results)
     total_policies = sum(len(r["policy_violations"]) for r in results)
@@ -27,7 +26,7 @@ def format_report(username, results):
     report.append("=" * 60)
     report.append("  GITHUB SECURITY SCANNER — SCAN REPORT")
     report.append("=" * 60)
-    report.append(f"  Account   : {username}")
+    report.append(f"  Account       : {username}")
     report.append(f"  Repos Scanned : {len(results)}")
     report.append(f"  Total Issues  : {total_issues}")
     report.append(f"  - Exposed Secrets   : {total_secrets}")
@@ -42,7 +41,6 @@ def format_report(username, results):
             repo_result["misconfigs"] or
             repo_result["policy_violations"]
         )
-
         if not has_issues:
             continue
 
@@ -70,75 +68,77 @@ def format_report(username, results):
     report.append("\n" + "=" * 60)
     report.append("  Scan complete. Review findings above.")
     report.append("=" * 60)
-
     return "\n".join(report)
 
 
 def send_sns_alert(report, total_issues):
-    """Send scan report to AWS SNS topic."""
     if not SNS_TOPIC_ARN:
         print("SNS_TOPIC_ARN not set — skipping SNS alert")
         return
-
     try:
         sns = boto3.client("sns", region_name=AWS_REGION)
         subject = f"[GitHub Security Scanner] {total_issues} Issue(s) Found in {GITHUB_USERNAME}'s Repos"
-
         sns.publish(
             TopicArn=SNS_TOPIC_ARN,
-            Subject=subject[:100],  # SNS subject limit
+            Subject=subject[:100],
             Message=report
         )
         print("SNS alert sent successfully!")
-
     except Exception as e:
         print(f"Failed to send SNS alert: {e}")
 
 
 def lambda_handler(event, context):
-    """Main Lambda handler — entry point for AWS Lambda."""
     print(f"Starting GitHub Security Scanner for user: {GITHUB_USERNAME}")
 
     if not GITHUB_TOKEN:
         raise ValueError("GITHUB_TOKEN environment variable not set")
 
-    # Initialize GitHub client
-    from github import Auth
-    g = Github(auth=Auth.Token(GITHUB_TOKEN))
-    user = g.get_user(GITHUB_USERNAME)
-    repos = user.get_repos()
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+    }
 
+    session = requests.Session()
+    session.headers.update(headers)
+
+    repos_resp = session.get(f"https://api.github.com/users/{GITHUB_USERNAME}/repos?per_page=100")
+    if repos_resp.status_code != 200:
+        raise Exception(f"Failed to fetch repos: {repos_resp.status_code}")
+
+    repos = repos_resp.json()
     results = []
 
     for repo in repos:
-        print(f"Scanning repo: {repo.name}")
+        print(f"Scanning repo: {repo['name']}")
+
+        if repo.get("size", 0) == 0:
+            print(f"  → Skipping empty repo")
+            continue
 
         repo_result = {
-            "repo": repo.name,
+            "repo": repo["name"],
             "secrets": [],
             "misconfigs": [],
             "policy_violations": []
         }
 
-        # Run all 3 scanners
-        repo_result["secrets"] = scan_repo_for_secrets(repo)
-        repo_result["misconfigs"] = scan_repo_for_misconfigs(repo)
-        repo_result["policy_violations"] = scan_repo_for_policy_violations(repo)
+        repo_result["secrets"] = scan_repo_for_secrets(repo["full_name"], headers, session)
+        repo_result["misconfigs"] = scan_repo_for_misconfigs(repo, headers, session)
+        repo_result["policy_violations"] = scan_repo_for_policy_violations(repo, headers, session)
 
         results.append(repo_result)
         print(f"  → Secrets: {len(repo_result['secrets'])} | Misconfigs: {len(repo_result['misconfigs'])} | Policy: {len(repo_result['policy_violations'])}")
 
-    # Generate report
     report = format_report(GITHUB_USERNAME, results)
     print("\n" + report)
 
-    # Calculate totals
     total_issues = sum(
         len(r["secrets"]) + len(r["misconfigs"]) + len(r["policy_violations"])
         for r in results
     )
 
-    # Send SNS alert if issues found
     if total_issues > 0:
         send_sns_alert(report, total_issues)
 
@@ -153,6 +153,5 @@ def lambda_handler(event, context):
     }
 
 
-# For local testing
 if __name__ == "__main__":
     lambda_handler({}, {})
